@@ -4,36 +4,27 @@ type ParseResult<T> =
   | ParseSuccess<T>
   | { success: false; expected: string; pos: number };
 
+const any: Parser<string> = (input, pos) => {
+  if (pos >= input.length) return { success: false, expected: "anything", pos };
+  return { success: true, value: input[pos]!, pos: pos + 1 };
+};
+
+const succeed =
+  <T>(val: T): Parser<T> =>
+  (input, pos) => ({ success: true, pos, value: val });
+
+const fail: Parser<any> = (input, pos) => ({
+  success: false,
+  pos,
+  expected: "",
+});
+
 const literal =
   (s: string): Parser<string> =>
   (input: string, pos: number) =>
     input.startsWith(s, pos)
       ? { success: true, pos: pos + s.length, value: s }
       : { success: false, expected: s, pos };
-
-const untilWhitespace: Parser<string> = (input: string, pos: number) => {
-  let i = pos;
-  while (input[i] !== " " && i < input.length) i++;
-  if (input[i] !== " " && i !== input.length)
-    return { success: false, expected: " ", pos };
-
-  const str = input.slice(pos, Math.max(i, 0));
-  console.log(str);
-
-  while (input[i] === " " && i < input.length - 1) i++;
-  const newPos = i;
-
-  return { success: true, pos: newPos, value: str };
-};
-
-const litTrimTrail =
-  (s: string): Parser<string> =>
-  (input: string, pos: number) => {
-    const parsed = untilWhitespace(input, pos);
-    return parsed.success && parsed.value === s
-      ? parsed
-      : { success: false, pos, expected: s };
-  };
 
 type Unwrap<T> = T extends Parser<infer U> ? U : never;
 type UnwrappedTuple<T> = {
@@ -104,18 +95,38 @@ const many =
     return result;
   };
 
-const x = seq(
-  litTrimTrail("let"),
-  untilWhitespace,
-  litTrimTrail("="),
-  untilWhitespace,
+const numeric = alt(
+  literal("0"),
+  literal("1"),
+  literal("2"),
+  literal("3"),
+  literal("4"),
+  literal("5"),
+  literal("6"),
+  literal("7"),
+  literal("8"),
+  literal("9"),
 );
 
-console.log(x("let a = 2", 0));
+const int = map(many(numeric), (x) => parseInt(x.join("")));
+const float = alt(
+  map(seq(int, literal("."), int), (x) => parseFloat(x.join(""))),
+  int,
+);
 
-const y = alt(literal("a"), literal("b"), literal("c"));
+const ws = many(alt(literal(" "), literal("\t"), literal("\n")));
 
-console.log(y("a", 0));
-console.log(y("b", 0));
-console.log(y("c", 0));
-console.log(y("d", 0));
+const token = <T>(p: Parser<T>) => map(seq(p, ws), ([v, _]) => v);
+
+const x = seq(
+  token(literal("let")),
+  token(literal("x")),
+  token(literal("=")),
+  token(float),
+);
+
+const parse = <T>(p: Parser<T>, input: string) => p(input, 0);
+
+console.log(parse(x, "let x = 1"));
+console.log(parse(x, "let x = 1.1"));
+console.log(parse(x, "let x = 23.34"));
